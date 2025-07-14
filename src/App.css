@@ -1,0 +1,430 @@
+/* App.css */
+
+/* Reset básico e estilo global */
+body, html {
+  margin: 0;
+  padding: 0;
+  font-family: poppins, sans-serif;
+  box-sizing: border-box;
+  height: 100%;
+  background-color: #121212;
+  color: #ffffff;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+.app.dark-theme {
+  background-color: #121212;
+  color: #ffffff;
+  display: flex;
+  height: 100vh;
+  justify-content: center;
+  align-items: center;
+  position: relative;
+  overflow: hidden;
+}
+
+/* Login */
+.login {
+  display: flex;
+  justify-content: center;
+  flex-direction: column;
+  background: #1e1e1e;
+  padding: 2rem;
+  border-radius: 10px;
+  box-shadow: 0 0 15px rgba(56, 56, 56, 0.8);
+  width: 250px;
+  height: 180px;
+}
+
+.login h1 {
+  margin-top: 0;
+  margin-bottom: 1rem;
+  font-weight: 700;
+  font-size: 1.5rem;
+  text-align: center;
+}
+
+.login input {
+  margin-bottom: 1rem;
+  padding: 0.5rem;
+  border: none;
+  border-radius: 5px;
+  background: #2a2a2a;
+  color: white;
+  font-size: 1rem;
+  transition: background-color 0.3s ease;
+}
+
+.login input:focus {
+  background: #3a3a3a;
+  outline: none;
+}
+
+.login button {
+  padding: 0.6rem;
+  border: none;
+  border-radius: 5px;
+  background: #3f51b5;
+  color: white;
+  cursor: pointer;
+  font-weight: 600;
+  transition: background-color 0.3s ease;
+}
+
+.login button:hover,
+.login button:focus {
+  background: #5a6bee;
+  outline: none;
+}
+
+/* Container principal */
+.chat-container {
+  display: flex;
+  width: 90%;
+  height: 90vh;
+  background: #1e1e1e;
+  border-radius: 10px;
+  overflow: hidden;
+  box-shadow: 0 0 15px rgba(0, 0, 0, 0.7);
+  position: relative;
+}
+
+/* Mensagem padrão quando nada selecionado */
+.no-selection-message {
+  flex-grow: 1;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  color: #888;
+  font-size: 1.2rem;
+  font-style: italic;
+  padding: 1rem;
+  user-select: none;
+}
+
+/* Barra lateral */
+.sidebar {
+  width: 25%;
+  background: #2c2c2c;
+  padding: 1rem;
+  overflow-y: auto;
+  border-right: 1px solid #444;
+  display: flex;
+  flex-direction: column;
+}
+
+.sidebar h3, 
+.sidebar h4 {
+  margin-top: 0;
+  margin-bottom: 0.75rem;
+  font-weight: 700;
+  font-size: 1.1rem;
+  user-select: none;
+}
+
+/* Botão criar grupo */
+.group-button { 
+  margin-bottom: 15px; 
+  border: none; 
+  width: 100%; 
+  height: 35px; 
+  border-radius: 8px; 
+  background: #4b4b4b; 
+  color: white; 
+  cursor: pointer;
+  font-weight: 600;
+  transition: background-color 0.3s ease;
+} 
+
+.group-button:hover,
+.group-button:focus {
+  background: #8b8b8b;
+  outline: none;
+}
+
+/* Usuários e grupos listados */
+.user, .group {
+  padding: 0.5rem 0.75rem;
+  margin: 0.25rem 0;
+  background: #3a3a3a;
+  border-radius: 6px;
+  cursor: pointer;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-weight: 500;
+  transition: background-color 0.3s ease;
+  user-select: none;
+}
+
+.user:hover,
+.group:hover,
+.user:focus,
+.group:focus {
+  background: #5050a0;
+  outline: none;
+  color: white;
+}
+
+.user.active, 
+.group.active {
+  background: #5a5aff;
+  color: white;
+  font-weight: 700;
+}
+
+/* Indicador de status online */
+.user span.status {
+  font-size: 1.2rem;
+  margin-left: 8px;
+}
+
+/* Badge notificações (usado se precisar) */
+.badge {
+  background: #d32f2f;
+  color: white;
+  font-size: 12px;
+  border-radius: 12px;
+  padding: 2px 7px;
+  margin-left: 8px;
+  font-weight: bold;
+  min-width: 18px;
+  text-align: center;
+  display: inline-block;
+  user-select: none;
+}
+
+/* Área do chat */
+.chat {
+  width: 75%;
+  display: flex;
+  flex-direction: column;
+  padding: 1rem;
+  background: #121212;
+  border-radius: 0 10px 10px 0;
+}
+
+/* Contêiner das mensagens com scroll */
+.messages {
+  flex-grow: 1;
+  overflow-y: auto;
+  margin-bottom: 1rem;
+  display: flex;
+  flex-direction: column;
+  padding-right: 10px;
+}
+
+/* Mensagens individuais */
+.message {
+  margin: 0.5rem 0;
+  padding: 0.6rem 1rem;
+  border-radius: 12px;
+  max-width: 60%;
+  word-wrap: break-word;
+  position: relative;
+  font-size: 1rem;
+  line-height: 1.3;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.3);
+  user-select: text;
+}
+
+/* Mensagem enviada (alinhada direita) */
+.message.sent {
+  background: #3f51b5;
+  align-self: flex-end;
+  color: white;
+  margin-left: auto;
+  border-top-left-radius: 12px;
+  border-top-right-radius: 4px;
+  border-bottom-left-radius: 12px;
+  border-bottom-right-radius: 12px;
+  box-shadow: 0 0 8px rgba(63, 81, 181, 0.8);
+}
+
+/* Mensagem recebida (alinhada esquerda) */
+.message.received {
+  background: #333;
+  align-self: flex-start;
+  margin-right: auto;
+  border-top-left-radius: 4px;
+  border-top-right-radius: 12px;
+  border-bottom-left-radius: 12px;
+  border-bottom-right-radius: 12px;
+  box-shadow: 0 0 5px rgba(255, 255, 255, 0.1);
+  color: #ddd;
+}
+
+/* Tempo da mensagem */
+.message .meta {
+  font-size: 0.65rem;
+  text-align: right;
+  margin-top: 0.3rem;
+  color: #aaa;
+  user-select: none;
+}
+
+/* Indicador de digitando */
+.typing {
+  font-style: italic;
+  color: #888;
+  margin-bottom: 0.5rem;
+  font-size: 0.9rem;
+  user-select: none;
+}
+
+/* Área de input */
+.input-area {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.input-area input {
+  flex: 1;
+  padding: 0.6rem 1rem;
+  border-radius: 8px;
+  border: none;
+  background: #2a2a2a;
+  color: white;
+  font-size: 1rem;
+  transition: background-color 0.3s ease;
+}
+
+.input-area input:focus {
+  background: #3a3a3a;
+  outline: none;
+}
+
+.input-area input::placeholder {
+  color: #666;
+}
+
+.input-area button {
+  padding: 0 1.2rem;
+  background: #3f51b5;
+  border: none;
+  border-radius: 8px;
+  color: white;
+  cursor: pointer;
+  font-weight: 600;
+  transition: background-color 0.3s ease;
+}
+
+.input-area button:hover,
+.input-area button:focus {
+  background: #5a6bee;
+  outline: none;
+}
+
+/* Scrollbars customizadas */
+::-webkit-scrollbar {
+  width: 7px;
+  height: 7px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #555;
+  border-radius: 5px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #777;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* Formulário modal de criação de grupo */
+.group-form {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background: #1e1e1e;
+  padding: 2rem;
+  border-radius: 12px;
+  box-shadow: 0 0 20px rgba(0, 0, 0, 0.9);
+  z-index: 1100;
+  width: 320px;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  user-select: none;
+}
+
+.group-form input {
+  padding: 0.6rem 1rem;
+  border-radius: 8px;
+  border: none;
+  background: #2a2a2a;
+  color: white;
+  font-size: 1rem;
+  transition: background-color 0.3s ease;
+}
+
+.group-form input:focus {
+  background: #3a3a3a;
+  outline: none;
+}
+
+.group-form button {
+  padding: 0.6rem;
+  border: none;
+  border-radius: 8px;
+  background: #3f51b5;
+  color: white;
+  cursor: pointer;
+  font-weight: 600;
+  transition: background-color 0.3s ease;
+}
+
+.group-form button:hover,
+.group-form button:focus {
+  background: #5a6bee;
+  outline: none;
+}
+
+/* Blur por trás do modal */
+.app.dark-theme::before {
+  content: "";
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  backdrop-filter: blur(5px);
+  background-color: rgba(0, 0, 0, 0.3);
+  z-index: 1050;
+  display: none;
+}
+
+.app.dark-theme.modal-open::before {
+  display: block;
+}
+
+/* Responsividade básica */
+@media (max-width: 768px) {
+  .chat-container {
+    flex-direction: column;
+    height: 100vh;
+    width: 100vw;
+  }
+  .sidebar {
+    width: 100%;
+    height: 150px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    display: flex;
+    flex-wrap: nowrap;
+  }
+  .user, .group {
+    flex: 0 0 auto;
+    margin-right: 8px;
+  }
+  .chat {
+    width: 100%;
+    height: calc(100vh - 150px);
+    border-radius: 0;
+  }
+}
