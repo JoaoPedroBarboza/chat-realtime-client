@@ -63,8 +63,6 @@ npm install
 npm run dev
 ```
 
-O servidor roda na porta `3000` e o cliente na porta `5173`.
-
 ## 📋 Estrutura do Projeto
 
 ```
