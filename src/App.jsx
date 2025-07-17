@@ -15,6 +15,7 @@ function App() {
   const [message, setMessage] = useState('');
   const [typingStatus, setTypingStatus] = useState('');
   const [typingTimer, setTypingTimer] = useState(null);
+  const [sendingMessage, setSendingMessage] = useState(false);
   const [darkMode, setDarkMode] = useState(true);
   const [showGroupForm, setShowGroupForm] = useState(false);
   const [groupName, setGroupName] = useState('');
@@ -28,6 +29,8 @@ function App() {
   const [avatar, setAvatar] = useState('');
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [messageHistory, setMessageHistory] = useState([]);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [isUploading, setIsUploading] = useState(false);
 
   const messagesEndRef = useRef(null);
   const fileInputRef = useRef(null);
@@ -44,10 +47,10 @@ function App() {
       setUsers(userList);
     });
 
-    socket.on('receive_private', ({ from, message, timestamp, id }) => {
+    socket.on('receive_private', ({ from, message, timestamp, id, fileData }) => {
       setMessages((prev) => ({
         ...prev,
-        [from]: [...(prev[from] || []), { id, from, content: message, time: timestamp, self: false }],
+        [from]: [...(prev[from] || []), { id, from, content: message, fileData, time: timestamp, self: false }],
       }));
 
       // Adicionar notificação
@@ -56,14 +59,19 @@ function App() {
       }
     });
 
-    socket.on('receive_group', ({ from, message, timestamp, roomId, id }) => {
+    socket.on('receive_group', ({ from, message, timestamp, roomId, id, fileData }) => {
       setRoomMessages((prev) => ({
         ...prev,
-        [roomId]: [...(prev[roomId] || []), { id, from, content: message, time: timestamp, self: from === username }],
+        [roomId]: [...(prev[roomId] || []), { id, from, content: message, fileData, time: timestamp, self: from === username }],
       }));
 
-      // Adicionar notificação
-      if (roomId !== selectedRoom) {
+      // Se é uma mensagem do próprio usuário, resetar estado de envio
+      if (from === username) {
+        setSendingMessage(false);
+      }
+
+      // Adicionar notificação apenas se não é do próprio usuário e não está na sala atual
+      if (from !== username && roomId !== selectedRoom) {
         addNotification(`Nova mensagem no grupo de ${from}`, 'group');
       }
     });
@@ -86,6 +94,12 @@ function App() {
     socket.on('group_created', ({ roomId, groupName, members, createdBy }) => {
       setGroups(prev => [...prev, { id: roomId, name: groupName, members, createdBy }]);
       addNotification(`Você foi adicionado ao grupo "${groupName}"`, 'group');
+    });
+
+    socket.on('message_sent', (payload) => {
+      // Confirmação de que a mensagem foi enviada (apenas para mensagens privadas)
+      // Para grupos, a confirmação vem via 'receive_group'
+      setSendingMessage(false);
     });
 
     socket.on('message_history', (history) => {
@@ -115,6 +129,7 @@ function App() {
       socket.off('message_history');
       socket.off('search_results');
       socket.off('room_history');
+      socket.off('message_sent');
     };
   }, [username, selectedUser, selectedRoom]);
 
@@ -146,7 +161,9 @@ function App() {
   };
 
   const sendMessage = () => {
-    if (message.trim()) {
+    if (message.trim() && !sendingMessage) {
+      setSendingMessage(true);
+
       if (selectedUser) {
         // Mensagem privada
         socket.emit('send_private', {
@@ -168,29 +185,18 @@ function App() {
           [selectedUser.username]: [...(prev[selectedUser.username] || []), newMessage],
         }));
       } else if (selectedRoom) {
-        // Mensagem em grupo
+        // Mensagem em grupo - não adiciona localmente, aguarda confirmação do servidor
         socket.emit('send_group', {
           roomId: selectedRoom,
           message,
         });
-
-        const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-        const newMessage = {
-          id: Date.now(),
-          from: username,
-          content: message,
-          time,
-          self: true
-        };
-
-        setRoomMessages((prev) => ({
-          ...prev,
-          [selectedRoom]: [...(prev[selectedRoom] || []), newMessage],
-        }));
       }
 
       setMessage('');
       setShowEmojiPicker(false);
+
+      // Reset sending state after a short delay
+      setTimeout(() => setSendingMessage(false), 500);
     }
   };
 
@@ -256,6 +262,132 @@ function App() {
 
   const addEmoji = (emoji) => {
     setMessage(prev => prev + emoji);
+  };
+
+  const uploadFile = async (file) => {
+    setIsUploading(true);
+    setUploadProgress(0);
+
+    const formData = new FormData();
+    formData.append('file', file);
+
+    try {
+      // Simular progresso de upload
+      const progressInterval = setInterval(() => {
+        setUploadProgress(prev => {
+          if (prev >= 90) {
+            clearInterval(progressInterval);
+            return prev;
+          }
+          return prev + 10;
+        });
+      }, 100);
+
+      const response = await fetch('http://localhost:3000/api/upload', {
+        method: 'POST',
+        body: formData,
+      });
+
+      clearInterval(progressInterval);
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Erro no upload do arquivo');
+      }
+
+      const result = await response.json();
+      setUploadProgress(100);
+
+      // Enviar mensagem com arquivo
+      const fileData = {
+        filename: result.file.filename,
+        originalName: result.file.originalName,
+        size: result.file.size,
+        mimetype: result.file.mimetype,
+        url: `http://localhost:3000${result.file.url}`
+      };
+
+      const fileMessage = `📎 ${result.file.originalName} (${formatFileSize(result.file.size)})`;
+
+      if (selectedUser) {
+        // Mensagem privada
+        socket.emit('send_private', {
+          to: selectedUser.username,
+          message: fileMessage,
+          fileData
+        });
+
+        const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        const newMessage = {
+          id: Date.now(),
+          from: username,
+          content: fileMessage,
+          fileData,
+          time,
+          self: true
+        };
+
+        setMessages((prev) => ({
+          ...prev,
+          [selectedUser.username]: [...(prev[selectedUser.username] || []), newMessage],
+        }));
+      } else if (selectedRoom) {
+        // Mensagem em grupo
+        socket.emit('send_group', {
+          roomId: selectedRoom,
+          message: fileMessage,
+          fileData
+        });
+      }
+
+      addNotification('Arquivo enviado com sucesso! ✅', 'success');
+    } catch (error) {
+      console.error('Erro no upload:', error);
+      addNotification(`Erro ao enviar arquivo: ${error.message} ❌`, 'error');
+    } finally {
+      setIsUploading(false);
+      setTimeout(() => setUploadProgress(0), 1000);
+    }
+  };
+
+  const handleFileSelect = (event) => {
+    const file = event.target.files[0];
+    if (file) {
+      // Verificar tamanho do arquivo (máximo 10MB)
+      if (file.size > 10 * 1024 * 1024) {
+        addNotification('Arquivo muito grande. Máximo 10MB permitido. ⚠️', 'warning');
+        return;
+      }
+
+      // Verificar tipos permitidos
+      const allowedTypes = [
+        'image/jpeg', 'image/png', 'image/gif', 'image/webp',
+        'application/pdf', 'text/plain',
+        'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        'application/vnd.ms-excel', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+      ];
+
+      if (!allowedTypes.includes(file.type)) {
+        addNotification('Tipo de arquivo não suportado. ❌', 'error');
+        return;
+      }
+
+      uploadFile(file);
+    }
+    // Limpar o input
+    event.target.value = '';
+  };
+
+  const formatFileSize = (bytes) => {
+    if (bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+  };
+
+  const isImageFile = (mimetype) => {
+    return mimetype && mimetype.startsWith('image/');
   };
 
   const getCurrentMessages = () => {
@@ -466,7 +598,39 @@ function App() {
                         {!msg.self && (
                           <div className="message-sender">{msg.from}</div>
                         )}
-                        <div className="message-text">{msg.content}</div>
+                        <div className="message-text">
+                          {msg.content}
+                          {msg.fileData && (
+                            <div className="file-attachment">
+                              {isImageFile(msg.fileData.mimetype) ? (
+                                <div className="image-preview">
+                                  <img
+                                    src={msg.fileData.url}
+                                    alt={msg.fileData.originalName}
+                                    className="attached-image"
+                                    onClick={() => window.open(msg.fileData.url, '_blank')}
+                                  />
+                                </div>
+                              ) : (
+                                <div className="file-download">
+                                  <div className="file-icon">📄</div>
+                                  <div className="file-info">
+                                    <span className="file-name">{msg.fileData.originalName}</span>
+                                    <span className="file-size">{formatFileSize(msg.fileData.size)}</span>
+                                  </div>
+                                  <a
+                                    href={msg.fileData.url}
+                                    download={msg.fileData.originalName}
+                                    className="download-btn"
+                                    title="Baixar arquivo"
+                                  >
+                                    ⬇️
+                                  </a>
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </div>
                       </div>
                       <div className="message-time">{msg.time}</div>
                     </div>
@@ -495,6 +659,20 @@ function App() {
             )}
 
             <div className="input-area">
+              {isUploading && (
+                <div className="upload-progress">
+                  <div className="progress-bar">
+                    <div
+                      className="progress-fill"
+                      style={{ width: `${uploadProgress}%` }}
+                    ></div>
+                  </div>
+                  <span className="progress-text">
+                    Enviando arquivo... {uploadProgress}%
+                  </span>
+                </div>
+              )}
+
               <div className="input-wrapper">
                 <button
                   onClick={() => setShowEmojiPicker(!showEmojiPicker)}
@@ -539,25 +717,26 @@ function App() {
                   type="file"
                   ref={fileInputRef}
                   style={{ display: 'none' }}
-                  accept="image/*"
-                  onChange={() => {/* Implementar envio de arquivo */ }}
+                  accept="image/*,.pdf,.doc,.docx,.txt,.xls,.xlsx"
+                  onChange={handleFileSelect}
                 />
 
                 <button
                   onClick={() => fileInputRef.current?.click()}
                   className="file-button"
                   title="Enviar arquivo"
-                  disabled={!selectedUser && !selectedRoom}
+                  disabled={(!selectedUser && !selectedRoom) || isUploading}
                 >
-                  📎
+                  {isUploading ? '⏳' : '📎'}
                 </button>
 
                 <button
                   onClick={sendMessage}
-                  disabled={!selectedUser && !selectedRoom}
+                  disabled={(!selectedUser && !selectedRoom) || sendingMessage}
                   className="send-button"
+                  title={sendingMessage ? "Enviando..." : "Enviar mensagem"}
                 >
-                  📤
+                  {sendingMessage ? '⏳' : '📤'}
                 </button>
               </div>
             </div>
