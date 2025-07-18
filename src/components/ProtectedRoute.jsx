@@ -3,11 +3,11 @@ import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 
 const ProtectedRoute = ({ children }) => {
-   const { isAuthenticated, isLoading } = useAuth();
+   const { isAuthenticated, loading } = useAuth();
    const location = useLocation();
 
    // Mostra loading enquanto verifica autenticação
-   if (isLoading) {
+   if (loading) {
       return (
          <div className="loading-screen">
             <div className="loading-spinner">

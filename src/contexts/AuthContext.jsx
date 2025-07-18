@@ -1,290 +1,153 @@
 import React, { createContext, useContext, useReducer, useEffect } from 'react';
-import { authService } from '../services/api';
-import {
-   getStoredToken,
-   getStoredUser,
-   isTokenExpired,
-   willExpireSoon,
-   clearAuthData
-} from '../utils/auth';
+import { jwtDecode } from 'jwt-decode';
+import api from '../services/api';
 
-// Estados da autenticação
 const AuthContext = createContext();
 
-// Ações do reducer
-const AUTH_ACTIONS = {
-   LOGIN_START: 'LOGIN_START',
-   LOGIN_SUCCESS: 'LOGIN_SUCCESS',
-   LOGIN_ERROR: 'LOGIN_ERROR',
-   LOGOUT: 'LOGOUT',
-   REFRESH_TOKEN: 'REFRESH_TOKEN',
-   SET_LOADING: 'SET_LOADING',
-   CLEAR_ERROR: 'CLEAR_ERROR'
-};
-
-// Estado inicial
-const initialState = {
-   user: null,
-   token: null,
-   isAuthenticated: false,
-   isLoading: true,
-   error: null
-};
-
-// Reducer
 const authReducer = (state, action) => {
    switch (action.type) {
-      case AUTH_ACTIONS.LOGIN_START:
-         return {
-            ...state,
-            isLoading: true,
-            error: null
-         };
-
-      case AUTH_ACTIONS.LOGIN_SUCCESS:
+      case 'LOGIN_SUCCESS':
          return {
             ...state,
             user: action.payload.user,
             token: action.payload.token,
             isAuthenticated: true,
-            isLoading: false,
-            error: null
+            loading: false
          };
-
-      case AUTH_ACTIONS.LOGIN_ERROR:
+      case 'LOGOUT':
          return {
             ...state,
             user: null,
             token: null,
             isAuthenticated: false,
-            isLoading: false,
-            error: action.payload
+            loading: false
          };
-
-      case AUTH_ACTIONS.LOGOUT:
+      case 'SET_LOADING':
          return {
             ...state,
-            user: null,
-            token: null,
-            isAuthenticated: false,
-            isLoading: false,
-            error: null
+            loading: action.payload
          };
-
-      case AUTH_ACTIONS.REFRESH_TOKEN:
-         return {
-            ...state,
-            token: action.payload.token,
-            user: action.payload.user
-         };
-
-      case AUTH_ACTIONS.SET_LOADING:
-         return {
-            ...state,
-            isLoading: action.payload
-         };
-
-      case AUTH_ACTIONS.CLEAR_ERROR:
-         return {
-            ...state,
-            error: null
-         };
-
       default:
          return state;
    }
 };
 
-// Provider do contexto
 export const AuthProvider = ({ children }) => {
-   const [state, dispatch] = useReducer(authReducer, initialState);
+   const [state, dispatch] = useReducer(authReducer, {
+      user: null,
+      token: localStorage.getItem('token'),
+      isAuthenticated: false,
+      loading: true
+   });
 
-   // Verificar token automaticamente na inicialização
    useEffect(() => {
-      const initializeAuth = async () => {
+      const token = localStorage.getItem('token');
+      if (token) {
          try {
-            const token = getStoredToken();
-            const user = getStoredUser();
+            const decoded = jwtDecode(token);
+            console.log('🔐 AuthContext - Token decodificado:', decoded);
 
-            if (token && user && !isTokenExpired(token)) {
-               // Token válido - autenticar usuário
+            if (decoded.exp * 1000 > Date.now()) {
+               // Criar objeto de usuário compatível
+               const user = {
+                  id: decoded.userId || decoded.id,
+                  username: decoded.username
+               };
+
+               console.log('🔐 AuthContext - Usuário extraído do token:', user);
+
                dispatch({
-                  type: AUTH_ACTIONS.LOGIN_SUCCESS,
-                  payload: { user, token }
+                  type: 'LOGIN_SUCCESS',
+                  payload: {
+                     user,
+                     token
+                  }
                });
-            } else if (token) {
-               // Token inválido - tentar renovar
-               try {
-                  const refreshData = await authService.refreshToken();
-                  dispatch({
-                     type: AUTH_ACTIONS.LOGIN_SUCCESS,
-                     payload: refreshData
-                  });
-               } catch (error) {
-                  // Falha na renovação - limpar dados
-                  console.error('Falha ao renovar token na inicialização:', error);
-                  clearAuthData();
-                  dispatch({ type: AUTH_ACTIONS.LOGOUT });
-               }
             } else {
-               // Sem token - não autenticado
-               dispatch({ type: AUTH_ACTIONS.LOGOUT });
+               console.log('⚠️ AuthContext - Token expirado');
+               localStorage.removeItem('token');
             }
          } catch (error) {
-            console.error('Erro na inicialização da autenticação:', error);
-            dispatch({ type: AUTH_ACTIONS.LOGOUT });
-         } finally {
-            dispatch({ type: AUTH_ACTIONS.SET_LOADING, payload: false });
+            console.error('❌ AuthContext - Erro ao decodificar token:', error);
+            localStorage.removeItem('token');
          }
-      };
-
-      initializeAuth();
+      }
+      dispatch({ type: 'SET_LOADING', payload: false });
    }, []);
 
-   // Verificação periódica e renovação automática
-   useEffect(() => {
-      if (!state.isAuthenticated || !state.token) return;
+   const login = async (username, password) => {
+      try {
+         dispatch({ type: 'SET_LOADING', payload: true });
+         console.log('Attempting login with:', { username, password: '***' });
 
-      const checkAndRefreshToken = async () => {
-         try {
-            const token = getStoredToken();
+         const response = await api.post('/api/auth/login', { username, password });
+         console.log('Login response:', response.data);
 
-            if (!token) {
-               dispatch({ type: AUTH_ACTIONS.LOGOUT });
-               return;
-            }
+         if (response.data.success) {
+            const { token, user } = response.data.data;
+            console.log('Login successful, token and user:', { token: token ? 'received' : 'missing', user });
+            localStorage.setItem('token', token);
 
-            // Se token expira em menos de 5 minutos, renovar
-            if (willExpireSoon(token, 300)) {
-               console.log('🔄 Renovando token automaticamente...');
-               const refreshData = await authService.refreshToken();
+            dispatch({
+               type: 'LOGIN_SUCCESS',
+               payload: { user, token }
+            });
 
-               dispatch({
-                  type: AUTH_ACTIONS.REFRESH_TOKEN,
-                  payload: refreshData
-               });
-
-               console.log('✅ Token renovado com sucesso');
-            }
-         } catch (error) {
-            console.error('❌ Erro na renovação automática:', error);
-            // Em caso de erro, fazer logout
-            await logout();
+            return true;
          }
-      };
-
-      // Verificar a cada 2 minutos
-      const interval = setInterval(checkAndRefreshToken, 2 * 60 * 1000);
-
-      // Verificar também na primeira execução após 1 minuto
-      const timeout = setTimeout(checkAndRefreshToken, 60 * 1000);
-
-      return () => {
-         clearInterval(interval);
-         clearTimeout(timeout);
-      };
-   }, [state.isAuthenticated, state.token]);
-
-   // Função de login
-   const login = async (credentials) => {
-      try {
-         dispatch({ type: AUTH_ACTIONS.LOGIN_START });
-
-         const data = await authService.login(credentials);
-
-         dispatch({
-            type: AUTH_ACTIONS.LOGIN_SUCCESS,
-            payload: data
-         });
-
-         return data;
+         console.log('Login failed - response not successful');
+         return false;
       } catch (error) {
-         const errorMessage = error.response?.data?.error || 'Erro no login';
-         dispatch({
-            type: AUTH_ACTIONS.LOGIN_ERROR,
-            payload: errorMessage
-         });
-         throw error;
-      }
-   };
-
-   // Função de registro
-   const register = async (userData) => {
-      try {
-         dispatch({ type: AUTH_ACTIONS.LOGIN_START });
-
-         const data = await authService.register(userData);
-
-         dispatch({
-            type: AUTH_ACTIONS.LOGIN_SUCCESS,
-            payload: data
-         });
-
-         return data;
-      } catch (error) {
-         const errorMessage = error.response?.data?.error || 'Erro no registro';
-         dispatch({
-            type: AUTH_ACTIONS.LOGIN_ERROR,
-            payload: errorMessage
-         });
-         throw error;
-      }
-   };
-
-   // Função de logout
-   const logout = async () => {
-      try {
-         await authService.logout();
-      } catch (error) {
-         console.error('Erro no logout:', error);
+         console.error('Login error:', error);
+         console.error('Error response:', error.response?.data);
+         return false;
       } finally {
-         clearAuthData();
-         dispatch({ type: AUTH_ACTIONS.LOGOUT });
+         dispatch({ type: 'SET_LOADING', payload: false });
       }
    };
 
-   // Limpar erro
-   const clearError = () => {
-      dispatch({ type: AUTH_ACTIONS.CLEAR_ERROR });
-   };
-
-   // Renovar token manualmente
-   const refreshToken = async () => {
+   const register = async (username, password) => {
       try {
-         const data = await authService.refreshToken();
-         dispatch({
-            type: AUTH_ACTIONS.REFRESH_TOKEN,
-            payload: data
-         });
-         return data;
+         dispatch({ type: 'SET_LOADING', payload: true });
+         console.log('Attempting register with:', { username, password: '***' });
+
+         const response = await api.post('/api/auth/register', { username, password });
+         console.log('Register response:', response.data);
+
+         return response.data.success;
       } catch (error) {
-         console.error('Erro ao renovar token:', error);
-         await logout();
-         throw error;
+         console.error('Register error:', error);
+         console.error('Error response:', error.response?.data);
+         return false;
+      } finally {
+         dispatch({ type: 'SET_LOADING', payload: false });
       }
    };
 
-   const value = {
-      ...state,
-      login,
-      register,
-      logout,
-      clearError,
-      refreshToken
+   const logout = () => {
+      localStorage.removeItem('token');
+      dispatch({ type: 'LOGOUT' });
    };
 
    return (
-      <AuthContext.Provider value={value}>
+      <AuthContext.Provider value={{
+         user: state.user,
+         token: state.token,
+         isAuthenticated: state.isAuthenticated,
+         loading: state.loading,
+         login,
+         register,
+         logout
+      }}>
          {children}
       </AuthContext.Provider>
    );
 };
 
-// Hook para usar o contexto
 export const useAuth = () => {
    const context = useContext(AuthContext);
    if (!context) {
-      throw new Error('useAuth deve ser usado dentro de AuthProvider');
+      throw new Error('useAuth must be used within an AuthProvider');
    }
    return context;
 };

@@ -1,190 +1,123 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { io } from 'socket.io-client';
 import { useAuth } from '../contexts/AuthContext';
-import { getStoredToken } from '../utils/auth';
 
 const useSocket = () => {
-   const { isAuthenticated, user } = useAuth();
-   const socketRef = useRef(null);
+   const [socket, setSocket] = useState(null);
+   const [connectedUsers, setConnectedUsers] = useState([]);
    const [isConnected, setIsConnected] = useState(false);
-   const [onlineUsers, setOnlineUsers] = useState([]);
+   const { token, user } = useAuth();
 
    useEffect(() => {
-      if (!isAuthenticated || !user) {
-         // Se não está autenticado, desconectar socket
-         if (socketRef.current) {
-            socketRef.current.disconnect();
-            socketRef.current = null;
-            setIsConnected(false);
-            setOnlineUsers([]);
-         }
-         return;
-      }
+      if (token && user) {
+         console.log('🔌 Iniciando conexão Socket.IO...');
+         console.log('🔑 Token disponível:', !!token);
+         console.log('👤 Usuário:', user.username);
 
-      // Conectar socket com autenticação
-      const connectSocket = () => {
-         const token = getStoredToken();
-
-         if (!token) {
-            console.error('Sem token para conectar socket');
-            return;
-         }
-
-         socketRef.current = io('http://localhost:3000', {
+         const newSocket = io('http://localhost:3000', {
             auth: {
                token: token
-            },
-            autoConnect: true,
-            reconnection: true,
-            reconnectionAttempts: 5,
-            reconnectionDelay: 1000,
-         });
-
-         // Eventos de conexão
-         socketRef.current.on('connect', () => {
-            console.log('✅ Socket conectado:', socketRef.current.id);
-            setIsConnected(true);
-         });
-
-         socketRef.current.on('disconnect', (reason) => {
-            console.log('❌ Socket desconectado:', reason);
-            setIsConnected(false);
-         });
-
-         socketRef.current.on('connect_error', (error) => {
-            console.error('❌ Erro de conexão socket:', error.message);
-            setIsConnected(false);
-
-            // Se erro de autenticação, pode ser token expirado
-            if (error.message.includes('Token')) {
-               console.log('🔄 Erro de token no socket, tentando reconectar...');
             }
          });
 
-         // Lista de usuários online
-         socketRef.current.on('user_list', (users) => {
-            setOnlineUsers(users);
+         newSocket.on('connect', () => {
+            console.log('✅ Socket conectado:', newSocket.id);
+            setIsConnected(true);
          });
 
-         // Eventos de erro
-         socketRef.current.on('error', (error) => {
-            console.error('❌ Erro no socket:', error);
-         });
-      };
-
-      connectSocket();
-
-      // Cleanup na desmontagem
-      return () => {
-         if (socketRef.current) {
-            socketRef.current.disconnect();
-            socketRef.current = null;
+         newSocket.on('disconnect', () => {
+            console.log('❌ Socket desconectado');
             setIsConnected(false);
-            setOnlineUsers([]);
-         }
-      };
-   }, [isAuthenticated, user]);
+         });
 
-   // Reconectar socket quando token é renovado
-   useEffect(() => {
-      if (isAuthenticated && user && socketRef.current && !isConnected) {
-         console.log('🔄 Reconectando socket após renovação de token...');
+         newSocket.on('connect_error', (error) => {
+            console.error('❌ Erro de conexão Socket.IO:', error);
+         });
 
-         // Desconectar e conectar novamente
-         socketRef.current.disconnect();
+         newSocket.on('user_list', (users) => {
+            console.log('Users list received:', users);
+            console.log('Setting connected users to:', users);
+            setConnectedUsers(users);
+         });
 
-         const token = getStoredToken();
-         if (token) {
-            socketRef.current.auth.token = token;
-            socketRef.current.connect();
-         }
+         newSocket.on('user_joined', (userData) => {
+            console.log('User joined:', userData);
+            setConnectedUsers(prev => [...prev, userData]);
+         });
+
+         newSocket.on('user_left', (userData) => {
+            console.log('User left:', userData);
+            setConnectedUsers(prev => prev.filter(u => u.id !== userData.id));
+         });
+
+         setSocket(newSocket);
+
+         return () => {
+            newSocket.disconnect();
+         };
       }
-   }, [isAuthenticated, user, isConnected]);
-
-   // Funções para enviar mensagens
-   const sendPrivateMessage = (to, message, fileData = null) => {
-      if (socketRef.current && isConnected) {
-         socketRef.current.emit('send_private', { to, message, fileData });
-      }
-   };
-
-   const sendGroupMessage = (roomId, message, fileData = null) => {
-      if (socketRef.current && isConnected) {
-         socketRef.current.emit('send_group', { roomId, message, fileData });
-      }
-   };
-
-   const createGroup = (groupName, members) => {
-      if (socketRef.current && isConnected) {
-         socketRef.current.emit('create_group', { groupName, members });
-      }
-   };
-
-   const joinRoom = (roomId) => {
-      if (socketRef.current && isConnected) {
-         socketRef.current.emit('join_room', roomId);
-      }
-   };
-
-   const leaveRoom = (roomId) => {
-      if (socketRef.current && isConnected) {
-         socketRef.current.emit('leave_room', roomId);
-      }
-   };
-
-   const startTyping = (to = null, roomId = null) => {
-      if (socketRef.current && isConnected) {
-         socketRef.current.emit('typing', { to, roomId });
-      }
-   };
-
-   const stopTyping = (to = null, roomId = null) => {
-      if (socketRef.current && isConnected) {
-         socketRef.current.emit('stop_typing', { to, roomId });
-      }
-   };
-
-   const updateStatus = (status) => {
-      if (socketRef.current && isConnected) {
-         socketRef.current.emit('update_status', { status });
-      }
-   };
-
-   const searchMessages = (query) => {
-      if (socketRef.current && isConnected) {
-         socketRef.current.emit('search_messages', { query });
-      }
-   };
-
-   // Função para adicionar listeners
-   const addEventListener = (event, callback) => {
-      if (socketRef.current) {
-         socketRef.current.on(event, callback);
-      }
-   };
-
-   // Função para remover listeners
-   const removeEventListener = (event, callback) => {
-      if (socketRef.current) {
-         socketRef.current.off(event, callback);
-      }
-   };
+   }, [token, user]);
 
    return {
-      socket: socketRef.current,
+      socket,
+      connectedUsers,
       isConnected,
-      onlineUsers,
-      sendPrivateMessage,
-      sendGroupMessage,
-      createGroup,
-      joinRoom,
-      leaveRoom,
-      startTyping,
-      stopTyping,
-      updateStatus,
-      searchMessages,
-      addEventListener,
-      removeEventListener
+      onlineUsers: connectedUsers,
+      sendPrivateMessage: (to, message, fileData) => {
+         if (socket) {
+            socket.emit('send_private', { to, message, fileData });
+         }
+      },
+      sendGroupMessage: (roomId, message, fileData) => {
+         if (socket) {
+            socket.emit('send_group', { roomId, message, fileData });
+         }
+      },
+      createGroup: (groupName, members) => {
+         if (socket) {
+            socket.emit('create_group', { groupName, members });
+         }
+      },
+      joinRoom: (roomId) => {
+         if (socket) {
+            socket.emit('join_room', roomId);
+         }
+      },
+      leaveRoom: (roomId) => {
+         if (socket) {
+            socket.emit('leave_room', roomId);
+         }
+      },
+      startTyping: (to, roomId) => {
+         if (socket) {
+            socket.emit('typing', { to, roomId });
+         }
+      },
+      stopTyping: (to, roomId) => {
+         if (socket) {
+            socket.emit('stop_typing', { to, roomId });
+         }
+      },
+      updateStatus: (status) => {
+         if (socket) {
+            socket.emit('update_status', { status });
+         }
+      },
+      searchMessages: (query) => {
+         if (socket) {
+            socket.emit('search_messages', { query });
+         }
+      },
+      addEventListener: (event, callback) => {
+         if (socket) {
+            socket.on(event, callback);
+         }
+      },
+      removeEventListener: (event, callback) => {
+         if (socket) {
+            socket.off(event, callback);
+         }
+      }
    };
 };
 
